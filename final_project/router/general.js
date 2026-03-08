@@ -3,100 +3,79 @@ let books = require("./booksdb.js");
 let isValid = require("./auth_users.js").isValid;
 let users = require("./auth_users.js").users;
 const public_users = express.Router();
+const axios = require('axios');
 
-
-// Helper function to simulate an async database call
+// ==========================================
+// 1. ASYNC DATABASE HELPERS
+// ==========================================
 const getBooksAsync = () => {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
-      resolve(books); // Resolves with the books object after 500ms
+      resolve(books);
     }, 500);
   });
 };
 
-// Simulate an async database check to see if a user exists
 const checkUserExistsAsync = (username) => {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       let userswithsamename = users.filter((user) => user.username === username);
-      resolve(userswithsamename.length > 0); // Resolves true if they exist, false if they don't
-    }, 300); // 300ms simulated delay
-  });
-};
-
-// Simulate an async database save operation
-const saveUserAsync = (username, password) => {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      users.push({ "username": username, "password": password });
-      resolve(); // Resolves when saving is complete
+      resolve(userswithsamename.length > 0);
     }, 300);
   });
 };
 
-const doesExist = (username) => {
-  // Filter the users array for any user with the same username
-  let userswithsamename = users.filter((user) => user.username === username);
-  
-  // If the array has items, the user exists (return true). Otherwise, return false.
-  if (userswithsamename.length > 0) {
-    return true;
-  } else {
-    return false;
-  }
-}
+const saveUserAsync = (username, password) => {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      users.push({ "username": username, "password": password });
+      resolve();
+    }, 300);
+  });
+};
 
+// ==========================================
+// 2. EXPRESS API ROUTES (THE "KITCHEN")
+// ==========================================
+
+// Register a new user
 public_users.post("/register", async (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
 
-  // Check if both username and password are provided
   if (username && password) {
     try {
-      // 1. Await the database check
       const userExists = await checkUserExistsAsync(username);
-
       if (!userExists) {
-        // 2. Await the database save
         await saveUserAsync(username, password);
         return res.status(200).json({ message: "User successfully registered. Now you can login" });
       } else {
-        return res.status(409).json({ message: "User already exists!" }); // 409 is the standard code for this
+        return res.status(409).json({ message: "User already exists!" });
       }
     } catch (error) {
       return res.status(500).json({ message: "An internal server error occurred." });
     }
   }
-  
-  // Return error if username or password is missing
   return res.status(400).json({ message: "Unable to register user. Missing username or password." });
 });
 
-// Get the book list available in the shop using async-await
+// Get the book list available in the shop
 public_users.get('/', async function (req, res) {
   try {
-    // 1. Wait for the "database" to return the books
-    const allBooks = await getBooksAsync(); 
-    
-    // 2. Send the response
+    const allBooks = await getBooksAsync();
     res.status(200).send(JSON.stringify(allBooks, null, 4));
   } catch (error) {
     res.status(500).json({ message: "Error fetching books" });
   }
 });
 
-// Get book details based on ISBN using async-await
+// Get book details based on ISBN
 public_users.get('/isbn/:isbn', async function (req, res) {
   try {
     const isbn = req.params.isbn;
-    
-    // 1. Await the books data
     const allBooks = await getBooksAsync();
-    
-    // 2. Find the specific book
     const book = allBooks[isbn];
 
-    // 3. Send response
     if (book) {
       res.status(200).json(book);
     } else {
@@ -109,39 +88,41 @@ public_users.get('/isbn/:isbn', async function (req, res) {
 
 // Get book details based on author
 public_users.get('/author/:author', async function (req, res) {
-  const author = req.params.author;
-  // 1. Convert the books object into an array of its inner book objects
-  const allBooks = await getBooksAsync();
+  try {
+    const author = req.params.author;
+    const allBooks = await getBooksAsync();
+    let booksArray = Object.values(allBooks);
+    let filtered_books = booksArray.filter((book) => book.author === author);
 
-  // 2. Now you can safely use .filter() on the array
-  let filtered_books = allBooks.filter((book) => book.author === author);
-
-  // 3. Send the matching books back to the client
-  if (filtered_books.length > 0) {
-    res.json(filtered_books);
-  } else {
-    res.status(404).json({ message: "No books found for this author" });
-  };
+    if (filtered_books.length > 0) {
+      res.status(200).json(filtered_books);
+    } else {
+      res.status(404).json({ message: "No books found for this author" });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching books by author" });
+  }
 });
 
 // Get all books based on title
 public_users.get('/title/:title', async function (req, res) {
-  const title = req.params.title;
-  // 1. Convert the books object into an array of its inner book objects
-  const allBooks = await getBooksAsync();
+  try {
+    const title = req.params.title;
+    const allBooks = await getBooksAsync();
+    let booksArray = Object.values(allBooks);
+    let filtered_books = booksArray.filter((book) => book.title === title);
 
-  // 2. Now you can safely use .filter() on the array
-  let filtered_books = allBooks.filter((book) => book.title === title);
-
-  // 3. Send the matching books back to the client
-  if (filtered_books.length > 0) {
-    res.json(filtered_books);
-  } else {
-    res.status(404).json({ message: "No books found for this title" });
-  };
+    if (filtered_books.length > 0) {
+      res.status(200).json(filtered_books);
+    } else {
+      res.status(404).json({ message: "No books found for this title" });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching books by title" });
+  }
 });
 
-//  Get book review
+// Get book review
 public_users.get('/review/:isbn', function (req, res) {
   const isbn = req.params.isbn;
   const book = books[isbn];
@@ -154,3 +135,44 @@ public_users.get('/review/:isbn', function (req, res) {
 });
 
 module.exports.general = public_users;
+
+
+// ==========================================
+// 3. AXIOS CLIENT FUNCTIONS (THE "CUSTOMER" - Tasks 10-13)
+// ==========================================
+
+const getAllBooks = async () => {
+  try {
+    const response = await axios.get('http://localhost:5000/');
+    console.log("Task 10 - All Books:\n", response.data);
+  } catch (error) {
+    console.error("Error fetching all books:", error.message);
+  }
+};
+
+const getBookByISBN = async (isbn) => {
+  try {
+    const response = await axios.get(`http://localhost:5000/isbn/${isbn}`);
+    console.log(`Task 11 - Book with ISBN ${isbn}:\n`, response.data);
+  } catch (error) {
+    console.error("Error fetching book by ISBN:", error.message);
+  }
+};
+
+const getBookByAuthor = async (author) => {
+  try {
+    const response = await axios.get(`http://localhost:5000/author/${author}`);
+    console.log(`Task 12 - Books by ${author}:\n`, response.data);
+  } catch (error) {
+    console.error("Error fetching books by author:", error.message);
+  }
+};
+
+const getBookByTitle = async (title) => {
+  try {
+    const response = await axios.get(`http://localhost:5000/title/${title}`);
+    console.log(`Task 13 - Books with title ${title}:\n`, response.data);
+  } catch (error) {
+    console.error("Error fetching books by title:", error.message);
+  }
+};
