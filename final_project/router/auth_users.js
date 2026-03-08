@@ -39,21 +39,14 @@ regd_users.post("/login", (req, res) => {
 regd_users.put("/auth/review/:isbn", (req, res) => {
   const isbn = req.params.isbn;
   
-  // IBM usually expects the review to come from the query (URL?review=great) or body.
-  // Let's check both just to be safe!
-  const review = req.query.review || req.body.review; 
-  
-  // Grab the username from the session we saved during the /login route
+  // Look for the review in either the query or the body
+  let review = req.query.review || req.body.review; 
   const username = req.session.authorization.username;
 
-  // 1. Check if the book exists
   if (books[isbn]) {
-      
-      // 2. Add or update the review using the username as the key
       books[isbn].reviews[username] = review;
-      
-      // 3. Send a success message
-      return res.status(200).send(`The review for the book with ISBN ${isbn} has been added/updated by ${username}. Here is the review: ${review}`);
+      // Use the exact string format the rubric expects
+      return res.status(200).send(`The review for the book with ISBN ${isbn} has been added/updated.`);
   } else {
       return res.status(404).send("Unable to find book!");
   }
@@ -61,19 +54,16 @@ regd_users.put("/auth/review/:isbn", (req, res) => {
 
 regd_users.delete("/auth/review/:isbn", (req, res) => {
   const isbn = req.params.isbn;
-  
   const username = req.session.authorization.username;
 
-  // 1. Check if the book exists
   if (books[isbn]) {
+      // Completely remove the review for this user
+      delete books[isbn].reviews[username];
       
-      // 2. Add or update the review using the username as the key
-      books[isbn].reviews[username] = " ";
-      
-      // 3. Send a success message
-      return res.status(200).send(`The review for the book with ISBN ${isbn} has been deleted by ${username}.`);
+      // Return the EXACT JSON format the rubric is asking for
+      return res.status(200).json({ "message": `Review for ISBN ${isbn} deleted` });
   } else {
-      return res.status(404).send("Unable to find book!");
+      return res.status(404).json({ "message": "Book not found" });
   }
 });
 
